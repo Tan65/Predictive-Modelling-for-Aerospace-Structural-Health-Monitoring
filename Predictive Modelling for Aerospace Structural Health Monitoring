@@ -1,0 +1,88 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+
+# Step 1: Simulate synthetic operational data
+np.random.seed(42)
+
+n_samples = 500
+
+# Features: Load cycles, stress amplitude, temperature, vibration level
+load_cycles = np.random.uniform(1e3, 1e6, n_samples)
+stress_amplitude = np.random.uniform(50, 300, n_samples)  # MPa
+temperature = np.random.uniform(-50, 150, n_samples)       # °C
+vibration = np.random.uniform(0.1, 5.0, n_samples)         # g (acceleration due to vibration)
+
+# Target: Fatigue life (in cycles)
+fatigue_life = (
+    1e7 / (stress_amplitude**0.5) * (300 - temperature)/300 * (5.0 / (vibration+0.5))
+) + np.random.normal(0, 50000, n_samples)  # Add some noise
+
+fatigue_life = np.clip(fatigue_life, 1e4, None)  # No negative values
+
+# Step 2: Create DataFrame
+data = pd.DataFrame({
+    'Load Cycles': load_cycles,
+    'Stress Amplitude (MPa)': stress_amplitude,
+    'Temperature (°C)': temperature,
+    'Vibration (g)': vibration,
+    'Fatigue Life (cycles)': fatigue_life
+})
+
+print(data.head())
+
+# Step 3: Prepare features
+X = data[['Load Cycles', 'Stress Amplitude (MPa)', 'Temperature (°C)', 'Vibration (g)']]
+y = data['Fatigue Life (cycles)']
+
+# Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Scale
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Step 4: Build a simple Neural Network model
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
+    tf.keras.layers.Dense(32, activation='relu'),
+    tf.keras.layers.Dense(1)  # Output fatigue life
+])
+
+model.compile(optimizer='adam', loss='mse')
+
+# Train
+history = model.fit(X_train_scaled, y_train, epochs=100, batch_size=32, validation_split=0.2, verbose=0)
+
+# Step 5: Predict and evaluate
+y_pred = model.predict(X_test_scaled).flatten()
+
+print("\nModel Performance:")
+print(f"Mean Squared Error: {mean_squared_error(y_test, y_pred):.2f}")
+print(f"R² Score: {r2_score(y_test, y_pred):.4f}")
+
+# Step 6: Plot actual vs predicted
+plt.figure(figsize=(8,5))
+plt.scatter(y_test, y_pred, alpha=0.7)
+plt.xlabel('Actual Fatigue Life (cycles)')
+plt.ylabel('Predicted Fatigue Life (cycles)')
+plt.title('Aerospace Structural Health Monitoring Prediction')
+plt.grid(True)
+plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'r--')
+plt.show()
+
+# Step 7: Plot training loss
+plt.figure(figsize=(8,5))
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Training Progress')
+plt.legend()
+plt.grid(True)
+plt.show()
